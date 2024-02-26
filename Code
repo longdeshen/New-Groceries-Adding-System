@@ -1,0 +1,1038 @@
+/***
+//// Last Build : 4_9-2023
+//// Compiler   : VS2022
+//// Programmer : Wong Yik Hong
+//// Capability : Implementing a variable size record.
+//// Function   : add, search, delete, update, display records
+***/
+
+
+/////////////     Includes    /////////////
+#include<string> //to use string datatype
+#include <cstdlib> // system()
+#include <conio.h> // getch()
+#include <fstream>
+#include <sys\stat.h> // stat(status of a file)
+#include <iostream>
+#include <iomanip>
+
+using namespace std;
+
+
+/////////////     Data types    /////////////
+int product_id = 1000;
+
+
+struct Groceries_Record // Groceries record; is the structName
+{
+	//declare all variables after this line
+	string firstname, lastname;
+	string product_name, price, weight, stock, type;
+	int product_id;
+
+
+	//don't touch after this line
+	bool deleted;
+};
+
+
+/////////////     Variable Declarations & Constants /////////////
+
+#define GROCERIES_FILE_NAME "Groceriess.txt" // name of the database file to store Groceriess informations
+#define BACKUP_FILE_NAME "Backup.txt"
+
+Groceries_Record Groceries; //variable declaration of Groceries
+char     choice; // for choice in menu
+fstream* fs = NULL, * fs1 = NULL;// file streams for files : fs -> 'Groceries', fs1 -> 'temp'
+bool     deletion = false; // if any record has been deleted
+
+
+/////////////     Function Prototypes    /////////////
+
+void closeFile(fstream*); // closes a file with its pointer, then deletes the file pointer
+bool isFileExist(const char*); // check if a file exists
+int searchproduct_id;
+string searchKeyword;
+
+void backupRecord(Groceries_Record record) {
+	ofstream backupFile(BACKUP_FILE_NAME, ios::out | ios::app | ios::binary);
+	if (backupFile.is_open()) {
+		backupFile.write((char*)&record, sizeof(Groceries_Record));
+		backupFile.close();
+	}
+	else {
+		cout << "\n Can't open or create backup file" << endl;
+		system("pause");
+	}
+}
+
+void restoreBackup() {
+	ifstream backupFile(BACKUP_FILE_NAME, ios::in | ios::binary);
+	if (backupFile.is_open()) {
+		Groceries_Record restoredRecord;
+
+		while (backupFile.read((char*)&restoredRecord, sizeof(Groceries_Record))) {
+			// Check if the record is not marked as deleted
+			if (restoredRecord.deleted != 1) {
+				// Append the restored record to the main database file
+				ofstream mainFile(GROCERIES_FILE_NAME, ios::out | ios::app | ios::binary);
+				if (mainFile.is_open()) {
+					mainFile.write((char*)&restoredRecord, sizeof(Groceries_Record));
+					mainFile.close();
+				}
+				else {
+					cout << "\n Can't open or create main database file" << endl;
+					system("pause");
+					return;
+				}
+			}
+		}
+
+		backupFile.close();
+		cout << "\n Data has been restored from backup." << endl;
+	}
+	else {
+		cout << "\n Backup file not found." << endl;
+	}
+
+	system("pause");
+}
+
+/////////////     Main    /////////////
+int main()
+{
+	ifstream input;
+	input.open("id.txt"), ios::in;
+	input >> product_id;
+	ofstream output;
+
+	while (true)
+	{
+		do ////// Menu //////
+		{
+			system("cls"); // clear screen
+		mainmenu:
+			cout << "----------------------------------" << "----------------------------------" << "----------------------------------" << endl;
+			cout << "|                                |" << "                                 |" << "                                 |" << endl;
+			cout << "| (1) Add a new Record           |" << "  (2) Serach an existing Record  |" << "  (3) Update an existing Record  |" << endl;
+			cout << "|                                |" << "                                 |" << "                                 |" << endl;
+			cout << "----------------------------------" << "----------------------------------" << "----------------------------------" << endl;
+
+
+			cout << "|                                |" << "                                 |" << "                                 |" << endl;
+			cout << "| (4) Delete an existing Record  |" << "  (5) Display Records            |" << "  (6) Exit                       |" << endl;
+			cout << "|                                |" << "                                 |" << "                                 |" << endl;
+			cout << "----------------------------------" << "----------------------------------" << "----------------------------------" << endl;
+
+			cout << "            Enter a choice (1-6) :"; choice = _getch();
+
+
+		} while (choice < '1' || choice > '6'); // while we have no good(between 1 and 6), show menu again
+
+		system("cls");
+
+		// to modify, delete or display records, database file should exist, then we have some records           
+		if (choice == '2' || choice == '3' || choice == '4' || choice == '5')
+		{
+			if (!isFileExist(GROCERIES_FILE_NAME)) // if database file doesn't exist
+			{
+				cout << "\n Database file ('" << GROCERIES_FILE_NAME << "') doesn't exist, then there are no records." << endl;
+				system("pause");
+				continue; // show the menu again
+			}
+		}
+
+		switch (choice)
+		{
+			long long int recs_num; // number of records before the record for modifying(deletion)
+			int id;
+
+		case '1': ////// Add Record //////
+		loopaddcase:
+			cout << "\n\t\t < Entering a new record > ";
+			cout << "\n   Enter the following informations for the new record : \n";
+
+			Groceries.product_id = ++product_id;
+
+			cout << "Product ID: " << Groceries.product_id << endl;
+			if (output.open("id.txt"), ios::out)
+			{
+				output << product_id;
+			}
+			else cout << "the file is empty";
+			output.close();
+
+			cout << "Product Name : ";
+			getline(cin, Groceries.product_name);
+			while (Groceries.product_name.find_first_of("qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM") == string::npos)
+			{
+				cout << "\n Invalid Input !!! Please Enter A Valid Name !" << endl;
+				cout << "Product Name : ";
+				getline(cin, Groceries.product_name);
+				int spacesToAdd = 14 - Groceries.product_name.length();
+				Groceries.product_name += string(spacesToAdd, ' ');
+			}
+
+			cout << "Price(RM) : ";
+			getline(cin, Groceries.price);
+			while (Groceries.price.find_first_of("1234567890.") == string::npos)
+			{
+				cout << "\n Invalid Input!!! Please Enter Number !" << endl;
+				cout << "Price(RM) : ";
+				getline(cin, Groceries.price);
+			}
+
+			cout << "Weight(g) : ";
+			getline(cin, Groceries.weight);
+			while (Groceries.weight.find_first_of("1234567890") == string::npos)
+			{
+				cout << "\n Invalid Input!!! Please Enter Number !" << endl;
+				cout << "Weight(g) : ";
+				getline(cin, Groceries.weight);
+			}
+
+			cout << "Stock Quantity : ";
+			getline(cin, Groceries.stock);
+			while (Groceries.stock.find_first_of("1234567890") == string::npos)
+			{
+				cout << "\n Invalid Input!!! Please Enter Number !" << endl;
+				cout << "Stock Quantity : ";
+				getline(cin, Groceries.stock);
+
+			}
+
+			cout << "Groceries Type: \n";
+			cout << " 1. Fresh Market \n 2. Frozen Foods \n 3. Household \n 4. Dry Goods \n 5. Baby Care \n Enter a choice: ";
+			getline(cin, Groceries.type);
+			while ((Groceries.type != "1") && (Groceries.type != "2") && (Groceries.type != "3") && (Groceries.type != "4") && (Groceries.type != "5"))
+			{
+				cout << "Invalid !!! Please Enter Again !" << endl;
+				cout << "Enter a choice(1-5) : \n";
+				cin >> Groceries.type;
+			}
+
+
+			if (Groceries.type == "1")
+			{
+				cout << "Type : Fresh Market" << endl;
+			}
+			else if (Groceries.type == "2")
+			{
+				cout << "Type : Frozen Foods" << endl;
+			}
+			else if (Groceries.type == "3")
+			{
+				cout << "Type : Household" << endl;
+			}
+			else if (Groceries.type == "4")
+			{
+				cout << "Type : Dry Goods" << endl;
+			}
+			else if (Groceries.type == "5")
+			{
+				cout << "Type : Baby Care" << endl;
+			}
+			else
+			{
+				cout << "";
+			}
+
+			//don't touch after this line
+			Groceries.deleted = 0;
+
+			fs = new fstream(GROCERIES_FILE_NAME, ios::out | ios::app | ios::binary);
+
+			if (!fs)
+			{
+				cout << "\n Can't open or create '" << GROCERIES_FILE_NAME << "' file" << endl;
+				system("pause");
+				break;
+			}
+			cout << "\n Do you want to save this record?\n 1 = Yes \n 2 = No \n 3 = Save and Add \n : ";
+			char confirm;
+		loopadd:
+			cin >> confirm;
+			cin.ignore();
+			system("cls");
+
+			if (confirm == '1')
+			{
+				fs->write((char*)&Groceries, sizeof(Groceries));
+				closeFile(fs);
+				goto mainmenu;
+				break;
+			}
+			if (confirm == '2')
+			{
+				product_id = Groceries.product_id - 1;
+				cout << "\nRecord not added" << endl;
+				system("pause");
+				goto mainmenu;
+			}
+			if (confirm == '3')
+			{
+				fs->write((char*)&Groceries, sizeof(Groceries));
+				closeFile(fs);
+				goto loopaddcase;
+			}
+			else
+			{
+				cout << "\n\n Invalid Input ! Please Enter \n 1 = Yes \n 2 = No \n 3 = Save and Add \n To Confirm Add Record \n";
+				cout << "\n Do you want to add this record? \n 1 = Yes \n 2 = No \n 3 = Save and Add \n : ";
+				goto loopadd;
+			}
+
+			fs->write((char*)&Groceries, sizeof(Groceries));
+
+			closeFile(fs);
+
+			cout << "\n Record added." << endl;
+			system("pause");
+
+			break;
+
+		case '2': ////// Search Record //////
+			system("cls");
+			cout << "\n";
+			cout << "\n";
+			cout << "\t#New Groceries Registration#" << endl;
+			cout << "\t#For Groceries Institude Office#" << endl;
+			cout << "\t#Search Reocrd" << endl;
+
+			cout << "\n";
+			cout << "\n";
+			cout << "\n Enter Groceries ID or Name that you want to search : ";
+			cin >> searchKeyword;
+			cin.ignore();
+
+			fs = new fstream(GROCERIES_FILE_NAME, ios::in | ios::binary);
+
+			if (!fs)
+			{
+				cout << "Can't open or create" << GROCERIES_FILE_NAME << "file" << endl;
+				system("pause");
+				break;
+			}
+
+			recs_num = -1;
+			while (fs->read((char*)&Groceries, sizeof(Groceries)))
+			{
+				if (!Groceries.deleted &&
+					(to_string(Groceries.product_id) == searchKeyword ||
+						Groceries.product_name.find(searchKeyword) != string::npos ||
+						Groceries.type == searchKeyword))
+				{
+					break;
+				}
+			}
+
+			if (fs->eof())//if the record is not in the fike || its there but deleted
+			{
+				cout << "\n Your specified Groceries doesn't exist in the file. " << endl;
+				closeFile(fs);
+				system("pause");
+				system("cls");
+				goto mainmenu;
+				break;
+			}
+
+			fs->seekp(sizeof(Groceries) * recs_num, ios::beg); //go to the searched record
+			fs->read((char*)&Groceries, sizeof(Groceries)); //display the searched record
+
+
+			if (!Groceries.deleted)
+			{
+				cout << "You may want to search: \n\n";
+				cout << "Product ID: " << Groceries.product_id << endl;
+				cout << "Product Name : " << Groceries.product_name << endl;
+				cout << "Price(RM) : " << Groceries.price << endl;
+				cout << "Weight(g) : " << Groceries.weight << endl;
+				cout << "Stock Quantity : " << Groceries.stock << endl;
+				cout << "Groceries Type: (" << Groceries.type;
+				if (Groceries.type == "1")
+				{
+					cout << ") Fresh Market" << endl;
+				}
+				else if (Groceries.type == "2")
+				{
+					cout << ") Frozen Foods" << endl;
+				}
+				else if (Groceries.type == "3")
+				{
+					cout << ") Household" << endl;
+				}
+				else if (Groceries.type == "4")
+				{
+					cout << ") Dry Goods" << endl;
+				}
+				else if (Groceries.type == "5")
+				{
+					cout << ") Baby Care" << endl;
+				}
+				else
+				{
+					cout << "";
+				}
+
+				cout << "\nNot the result you want to search? Try other keywords." << endl;
+			}
+
+
+
+
+			cout << "\n To return to menu.";
+			system("pause");
+			system("cls");
+			closeFile(fs);
+			goto mainmenu;
+			break;
+
+
+
+		case '3': ////// Update Record //////
+			system("cls");
+			cout << "\n";
+			cout << "\n";
+			cout << "t#New Groceries Registration#" << endl;
+			cout << "t#Update Specific Record#" << endl;
+			cout << "\n";
+			cout << "\n";
+
+			cout << "\n Enter Groceries ID, that you want modify its informatin : ";
+			cin >> searchproduct_id;
+			cin.ignore();
+
+			fs = new fstream(GROCERIES_FILE_NAME, ios::in | ios::out | ios::binary);
+
+			if (!fs)
+			{
+				cout << "\n Can't open or create '" << GROCERIES_FILE_NAME << "' file" << endl;
+				system("pause");
+
+				break;
+			}
+
+			recs_num = -1;
+
+			while (fs->read((char*)&Groceries, sizeof(Groceries)))
+			{
+				recs_num++;
+
+				if (searchproduct_id == Groceries.product_id && !Groceries.deleted)
+					/*if user delete an product then added another one with the same id instaead of
+					program runs, detected driver is still there then we go through all the file*/
+					break;
+			}
+
+			if (fs->eof()) // if (the record is not in the file || it's there but it's deleted)
+			{
+				cout << "\n Your specified Groceries doesn't exist in file." << endl;
+				closeFile(fs);
+				system("pause");
+				system("cls");
+				goto mainmenu;
+				break;
+			}
+
+		UpdateList:
+			cout << "\n   Select specific record to update : \n";
+			cout << "1. Product Name : " << Groceries.product_name << endl;
+			cout << "2. Price(RM) : " << Groceries.price << endl;
+			cout << "3. Weight(g) : " << Groceries.weight << endl;
+			cout << "4. Stock Quantity : " << Groceries.stock << endl;
+			cout << "5. Groceries Type: (" << Groceries.type;
+
+			if (Groceries.type == "1")
+			{
+				cout << ") Fresh Market" << endl;
+			}
+			else if (Groceries.type == "2")
+			{
+				cout << ") Frozen Foods" << endl;
+			}
+			else if (Groceries.type == "3")
+			{
+				cout << ") Household" << endl;
+			}
+			else if (Groceries.type == "4")
+			{
+				cout << ") Dry Goods" << endl;
+			}
+			else if (Groceries.type == "5")
+			{
+				cout << ") Baby Care" << endl;
+			}
+			else
+			{
+				cout << "";
+			}
+
+			cout << "Enter specific number to update or change the record ; Enter 0 to save record: ";
+			char choice;
+			//cin.ignore();
+			cin >> choice;
+
+			if (choice == '0')
+			{
+			update:
+				fs->seekp(sizeof(Groceries) * recs_num, ios::beg); //go to the first record to be modified
+				fs->write((char*)&Groceries, sizeof(Groceries));
+				closeFile(fs);
+				cout << "\nRecord is updated." << endl;
+				system("pause");
+				system("cls");
+				goto mainmenu;
+				break;
+			}
+
+			switch (choice)
+			{
+			case '1': //update name
+				system("cls");
+				cout << "Product Name : ";
+				cin.ignore();
+				getline(cin, Groceries.product_name);
+				while (Groceries.product_name.find_first_of("qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM") == string::npos)
+				{
+					cout << "\nInvalid Input! Please Enter In A Valid Name!!!" << endl;
+					cout << "Product Name: ";
+					getline(cin, Groceries.product_name);
+				}
+				cout << "To continue update.";
+				system("pause");
+				system("cls");
+				goto UpdateList;
+				break;
+
+			case '2': //update price
+				system("cls");
+				cout << "Price(RM) : ";
+				cin.ignore();
+				getline(cin, Groceries.price);
+				while (Groceries.price.find_first_of("1234567890.") == string::npos)
+				{
+					cout << "\n Invalid Input!!! Please Enter Number !" << endl;
+					cout << "Price(RM) : ";
+					getline(cin, Groceries.price);
+				}
+				cout << "To continue update.";
+				system("pause");
+				system("cls");
+				goto UpdateList;
+				break;
+
+			case '3': //update weight
+				system("cls");
+				cout << "Weight(g) : ";
+				cin.ignore();
+				getline(cin, Groceries.weight);
+				while (Groceries.weight.find_first_of("1234567890") == string::npos)
+				{
+					cout << "\n Invalid Input!!! Please Enter Number !" << endl;
+					cout << "Weight(g) : ";
+					getline(cin, Groceries.weight);
+				}
+				cout << "To continue update.";
+				system("pause");
+				system("cls");
+				goto UpdateList;
+				break;
+
+			case '4': //update stock quantity
+				system("cls");
+				cout << "Stock Quantity : ";
+				cin.ignore();
+				getline(cin, Groceries.stock);
+				while (Groceries.stock.find_first_of("1234567890") == string::npos)
+				{
+					cout << "\n Invalid Input!!! Please Enter Number !" << endl;
+					cout << "Stock Quantity : ";
+					getline(cin, Groceries.stock);
+
+				}
+				cout << "To continue update.";
+				system("pause");
+				system("cls");
+				goto UpdateList;
+				break;
+
+			case'5': //update type
+				system("cls");
+				cout << "Groceries Type : ";
+				cin.ignore();
+				cout << " 1. Fresh Market \n 2. Frozen Foods \n 3. Household \n 4. Dry Goods \n 5. Baby Care \n Enter a choice: ";
+				getline(cin, Groceries.type);
+				while ((Groceries.type != "1") && (Groceries.type != "2") && (Groceries.type != "3") && (Groceries.type != "4") && (Groceries.type != "5"))
+				{
+					cout << "Invalid !!! Please Enter Again !" << endl;
+					cout << "Enter a choice(1-5) : \n";
+					cin >> Groceries.type;
+				}
+
+				if (Groceries.type == "1")
+				{
+					cout << "Type : Fresh Market" << endl;
+				}
+				else if (Groceries.type == "2")
+				{
+					cout << "Type : Frozen Foods" << endl;
+				}
+				else if (Groceries.type == "3")
+				{
+					cout << "Type : Household" << endl;
+				}
+				else if (Groceries.type == "4")
+				{
+					cout << "Type : Dry Goods" << endl;
+				}
+				else if (Groceries.type == "5")
+				{
+					cout << "Type : Baby Care" << endl;
+				}
+				else
+				{
+					cout << "";
+				}
+
+				cout << "To continue update.";
+				system("pause");
+				system("cls");
+				goto UpdateList;
+				break;
+
+			default:
+				cout << "\n\nInvalid number! Please Enter Again: ";
+				goto UpdateList;
+			}
+
+			cout << "\n Record is modified." << endl;
+			system("pause");
+
+			break;
+
+
+		case '4': ////// Delete Record //////
+		deletePage:
+			system("cls");
+			cout << "\n";
+			cout << "\n";
+			cout << "t#New Groceries Registration#" << endl;
+			cout << "t#Delete Record#" << endl;
+			cout << "\n";
+			cout << "\n";
+
+			cout << "Please Select: " << endl;
+			cout << "1. Delete record\n2. Restore record" << endl;
+			char choiceDelete;
+			cin >> choiceDelete;
+
+			if(choiceDelete == '1')
+
+			{
+				cout << "\n Enter Groceries's ID that you want to delete : ";
+				cin >> searchproduct_id;
+				cin.ignore();
+
+
+
+				fs = new fstream(GROCERIES_FILE_NAME, ios::in | ios::out | ios::binary);
+
+				if (!fs)
+				{
+					cout << "\n Can't open or create '" << GROCERIES_FILE_NAME << "' file." << endl;
+					system("pause");
+					break;
+				}
+
+				recs_num = -1;
+
+				while (fs->read((char*)&Groceries, sizeof(Groceries)))
+				{
+					recs_num++;
+
+					if (searchproduct_id == Groceries.product_id && !Groceries.deleted) // if user deleted an Groceries then added another one with the same ID in the same instance of program runs, deleted Groceries is still there, then we should go through all the file
+						break;
+				}
+
+				if (fs->eof()) // if (the record is not in the file || it's there but it's deleted)
+				{
+					cout << "\n Your specified Groceries doesn't exist in database file." << endl;
+					closeFile(fs);
+					system("pause");
+					break;
+				}
+
+
+				fs->seekp(sizeof(Groceries) * recs_num, ios::beg); //go to the searched record
+				fs->read((char*)&Groceries, sizeof(Groceries)); //display the searched record
+
+
+				if (!Groceries.deleted)
+				{
+					cout << "Product ID: " << searchproduct_id << endl;
+					cout << "Product Name : " << Groceries.product_name << endl;
+					cout << "Price(RM) : " << Groceries.price << endl;
+					cout << "Weight(g) : " << Groceries.weight << endl;
+					cout << "Stock Quantity : " << Groceries.stock << endl;
+					cout << "Groceries Type: (" << Groceries.type;
+					if (Groceries.type == "1")
+					{
+						cout << ") Fresh Market" << endl;
+					}
+					else if (Groceries.type == "2")
+					{
+						cout << ") Frozen Foods" << endl;
+					}
+					else if (Groceries.type == "3")
+					{
+						cout << ") Household" << endl;
+					}
+					else if (Groceries.type == "4")
+					{
+						cout << ") Dry Goods" << endl;
+					}
+					else if (Groceries.type == "5")
+					{
+						cout << ") Baby Care" << endl;
+					}
+					else
+					{
+						cout << "";
+					}
+				}
+
+				int choiceDelete;
+				cout << "\nAre you sure want to delete? \n 1 = Yes \n 2 = No, go to mainmenu \n 3 = No, stay at this page\n";
+				cin >> choiceDelete;
+				if (choiceDelete == 1)
+				{
+					backupRecord(Groceries);
+					Groceries.deleted = 1;
+
+					fs->seekp(sizeof(Groceries) * recs_num, ios::beg);
+					fs->write((char*)&Groceries, sizeof(Groceries));
+
+					closeFile(fs);
+
+					deletion = true; // we have some deleted records
+
+					cout << "\n Record is deleted." << endl;
+					system("pause");
+					system("cls");
+					goto mainmenu;
+				}
+
+				else if (choiceDelete == 2)
+				{
+					system("cls");
+					goto mainmenu;
+				}
+
+				else if (choiceDelete == 3)
+				{
+					goto deletePage;
+				}
+				else
+				{
+					cout << "Invalid choice! Please Enter Again.\n";
+					cout << "Are you sure want to delete? \n 1 = Yes \n 2 = No, go to mainmenu \n 3 = No, stay at this page\n";
+					cin >> choiceDelete;
+				}
+
+
+				break;
+			}
+
+			else if (choiceDelete == '2')
+			{
+				int userInput;
+				cout << "Enter Product ID of the Groceries that you want to restore: " << endl;
+				cin >> userInput;
+
+				restoreBackup();
+
+				fs = new fstream(GROCERIES_FILE_NAME, ios::in | ios::binary);
+
+			}
+			
+			else
+			{
+				cout << "Invalid. Please Enter again." << endl;
+				system("pause");
+				system("cls");
+				goto deletePage;
+			}
+
+
+		case '5': // Display Records
+		display:
+			system("cls");
+			cout << "\n";
+			cout << "\n";
+			cout << "t#New Groceries Registration#" << endl;
+			cout << "t#Display Record#" << endl;
+			cout << "\n";
+			cout << "\n";
+
+			////// Print Salaried records...
+			fs = new fstream(GROCERIES_FILE_NAME, ios::in | ios::binary);
+
+			if (!fs)
+			{
+				cout << "\n Can't open or create '" << GROCERIES_FILE_NAME << "' file." << endl;
+				system("pause");
+				break;
+			}
+
+			cout << "1. Display all data" << endl;
+			cout << "2. Display data according to type" << endl;
+			cout << "Please select the way to display records: ";
+			char choiceDisplay;
+			cin >> choiceDisplay;
+
+			if (choiceDisplay == '1')
+			{
+				// Display titles
+				system("cls");
+				cout << "\n";
+				cout << "\n";
+				cout << "t#New Groceries Registration#" << endl;
+				cout << "t#Display Record#" << endl;
+				cout << "\n";
+				cout << "\n";
+
+				fs->clear();  // Clear any error flags
+				fs->seekg(0, ios::beg);  // Move file pointer to the beginning
+
+				cout << "\t\t    " << setfill('-') << setw(117) << "" << endl;
+				cout << setfill(' ')
+					<< left << setw(18) << "\t\t\tProduct ID"
+					<< setw(32) << "Product Name"
+					<< setw(16) << "Price (RM) "
+					<< setw(16) << "Weight (g)"
+					<< setw(16) << "Stock"
+					<< setw(13) << "Type" << endl;
+				cout << "\t\t    " << setfill('-') << setw(117) << "" << endl;
+
+				// Display all records
+				while (fs->read((char*)&Groceries, sizeof(Groceries)))
+				{
+					if (!Groceries.deleted)
+					{
+						cout << "\n\n\t\t\t" << Groceries.product_id;
+						cout << "\t\t" << Groceries.product_name;
+						cout << "\t\t\t" << Groceries.price;
+						cout << "\t\t" << Groceries.weight;
+						cout << "\t\t" << Groceries.stock;
+						cout << "\t\t(" << Groceries.type;
+
+
+						if (Groceries.type == "1")
+						{
+							cout << ") Fresh Market" << endl;
+						}
+						else if (Groceries.type == "2")
+						{
+							cout << ") Frozen Foods" << endl;
+						}
+						else if (Groceries.type == "3")
+						{
+							cout << ") Household" << endl;
+						}
+						else if (Groceries.type == "4")
+						{
+							cout << ") Dry Goods" << endl;
+						}
+						else if (Groceries.type == "5")
+						{
+							cout << ") Baby Care" << endl;
+						}
+						else
+						{
+							cout << "";
+						}
+					}
+				}
+
+				cout << "\n\t\t    " << setfill('-') << setw(117) << "" << endl;
+				cout << "\n\n To see menu, "; system("pause");
+				closeFile(fs);
+				break;
+			}
+
+
+			else if (choiceDisplay == '2')
+			{
+			selectType:
+				system("cls");
+				// Select category
+
+				system("cls");
+				cout << "\n";
+				cout << "\n";
+				cout << "t#New Groceries Registration#" << endl;
+				cout << "t#Display Record#" << endl;
+				cout << "\n";
+				cout << "\n";
+
+				cout << "Select groceries type to display (1-5) " << endl;
+				cout << " 1. Fresh Market \n 2. Frozen Foods \n 3. Household \n 4. Dry Goods \n 5. Baby Care \n Enter a choice: ";
+				char categoryChoice;
+				cin >> categoryChoice;
+
+
+				fs->clear();  // Clear any error flags
+				fs->seekg(0, ios::beg);  // Move file pointer to the beginning
+				// Display titles
+				cout << "\t\t    " << setfill('-') << setw(117) << "" << endl;
+				cout << setfill(' ')
+					<< left << setw(18) << "\t\t\tProduct ID"
+					<< setw(32) << "Product Name"
+					<< setw(16) << "Price (RM) "
+					<< setw(16) << "Weight (g)"
+					<< setw(16) << "Stock"
+					<< setw(13) << "Type" << endl;
+				cout << "\t\t    " << setfill('-') << setw(117) << "" << endl;
+
+				while (fs->read((char*)&Groceries, sizeof(Groceries)))
+				{
+
+					if (!Groceries.deleted && Groceries.type == string(1, categoryChoice))
+					{
+						cout << "\n\n\t\t\t" << Groceries.product_id;
+						cout << "\t\t" << Groceries.product_name;
+						cout << "\t\t\t" << Groceries.price;
+						cout << "\t\t" << Groceries.weight;
+						cout << "\t\t" << Groceries.stock;
+						cout << "\t\t(" << Groceries.type;
+
+						if (Groceries.type == "1")
+						{
+							cout << ") Fresh Market" << endl;
+						}
+						else if (Groceries.type == "2")
+						{
+							cout << ") Frozen Foods" << endl;
+						}
+						else if (Groceries.type == "3")
+						{
+							cout << ") Household" << endl;
+						}
+						else if (Groceries.type == "4")
+						{
+							cout << ") Dry Goods" << endl;
+						}
+						else if (Groceries.type == "5")
+						{
+							cout << ") Baby Care" << endl;
+						}
+						else
+						{
+							cout << "";
+						}
+					}
+				}
+				cout << "\n\t\t    " << setfill('-') << setw(117) << "" << endl;
+				cout << "\n\n To see menu, "; system("pause");
+				closeFile(fs);
+				break;
+			}
+			else
+			{
+				cout << "Don't have this record. Pleaese Enter again!" << endl;
+				system("pause");
+				goto display;
+			}
+
+
+
+
+
+		case '6': // Exit
+
+			if (deletion) // if there is any deletion, then update database file (create a new temp file that doesn't have deleted records, then remove the old database file and rename temp file to database file name)
+			{
+				cout << "\n Updating '" << GROCERIES_FILE_NAME << "' File..." << endl;
+
+				fs = new fstream(GROCERIES_FILE_NAME, ios::in | ios::binary);
+				if (!fs)
+				{
+					cout << "\n Can't open '" << GROCERIES_FILE_NAME << "' file, then Updating is incomplete." << endl;
+					system("pause");
+
+					system("cls");
+					return 1;
+				}
+
+				fs1 = new fstream("temp", ios::out | ios::binary);
+				if (!fs1)
+				{
+					cout << "\n Can't create temp file, then Updating is incomplete." << endl;
+					system("pause");
+
+					closeFile(fs);
+					system("cls");
+					return 1;
+				}
+
+				// write nondeleted records to the temp file
+				while (fs->read((char*)&Groceries, sizeof(Groceries)))
+					if (!Groceries.deleted)
+						fs1->write((char*)&Groceries, sizeof(Groceries));
+
+				closeFile(fs);
+				closeFile(fs1);
+
+				if (remove(GROCERIES_FILE_NAME) == -1) // if there is an error
+				{
+					cout << "\n Can't delete '" << GROCERIES_FILE_NAME << "' file, then Updating is incomplete." << endl;
+					system("pause");
+
+					system("cls");
+					return 1;
+				}
+
+
+				struct stat st; // to check size of the temp file
+				int res = stat("temp", &st);
+
+				if (st.st_size == 0) // if all of records are deleted then the temp file size is zero                        
+					remove("temp"); // we have no records, then no database file is needed, just delete the temp file
+				else
+					if (rename("temp", GROCERIES_FILE_NAME))
+					{
+						cout << "\n Can't rename temp file, then Updating is incomplete." << endl;
+						system("pause");
+
+						system("cls");
+						return 1;
+					}
+
+				cout << "\n Updating database file completed." << endl;
+				system("pause");
+			}
+
+			system("cls");
+			return 0;
+
+			break;
+		} // end 'switch'
+	} // end 'while'
+
+	return 0;
+} // end 'main()'
+
+/////////////     Function Definitions    /////////////
+void closeFile(fstream* fs)
+{
+	fs->close(); // close the file
+	delete fs;
+	fs = NULL;
+}
+
+bool isFileExist(const char* file_name)
+{
+	struct stat st; // to check status of file
+	int res = stat(file_name, &st);
+	return (res == 0); // if file exists     
+}
